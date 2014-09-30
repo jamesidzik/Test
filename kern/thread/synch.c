@@ -163,7 +163,17 @@ lock_create(const char *name)
                 return NULL;
         }
         
-        // add stuff here as needed
+        // add stuff here as needed1
+        lock->lk_wchan = wchan_create(lock->lk_name);
+        if (lock->lk_wchan == NULL) {
+                kfree(lock->lk_name);
+                kfree(lock);
+                return NULL;
+        }
+
+        spinlock_init(&lock->lk_spinlock);
+        lock->lk_owner = NULL;
+        lock->lk_status = false;
         
         return lock;
 }
@@ -174,7 +184,7 @@ lock_destroy(struct lock *lock)
         KASSERT(lock != NULL);
 
         // add stuff here as needed
-        
+        kfree(lock->lk_wchan); 
         kfree(lock->lk_name);
         kfree(lock);
 }
@@ -182,15 +192,35 @@ lock_destroy(struct lock *lock)
 void
 lock_acquire(struct lock *lock)
 {
-        // Write this
 
-        (void)lock;  // suppress warning until code gets written
+	KASSERT(lock != NULL);
+	
+	spinlock_aquire(&lock->lk_spinlock);
+        while(lock->lk_status == true)
+	{
+	    wchan_lock(lock->lk_wchan);
+	    spinlock_release(&lock->lk_spinlock);
+            wchan_sleep(lock->lk_wchan);
+            spinlock_aquire(&lock->lk_spinlock);
+        }
+	KASSERT(lock->lk_status == false);
+	lock->lk_owner = curthread;
+        lock->lk_status = true;
+	spinlock_release(&lock->lk_spinlock);
 }
 
 void
 lock_release(struct lock *lock)
 {
-        // Write this
+        KASSERT(lock != NULL);
+
+        spinlock_aquire(&lock->lk_spinlock);
+	KASSERT(lock->lk_owner == curthread);
+        lock->lk_status = false;
+        lock->lk_owner = NULL;
+        wchan_wakeone(lock->lk_wchan);
+        spinlock_release(&lock->lk_spinlock);        
+
 
         (void)lock;  // suppress warning until code gets written
 }
@@ -198,11 +228,16 @@ lock_release(struct lock *lock)
 bool
 lock_do_i_hold(struct lock *lock)
 {
-        // Write this
+        KASSERT(lock != NULL);
 
-        (void)lock;  // suppress warning until code gets written
-
-        return true; // dummy until code gets written
+        if (lock->lk_owner == curthread)
+	{
+	    return true;
+	}
+	else
+	{
+	    return false;
+	}
 }
 
 ////////////////////////////////////////////////////////////
