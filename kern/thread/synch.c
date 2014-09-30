@@ -184,7 +184,8 @@ lock_destroy(struct lock *lock)
         KASSERT(lock != NULL);
 
         // add stuff here as needed
-        kfree(lock->lk_wchan); 
+        spinlock_cleanup(&lock->lk_spinlock);
+        wchan_destroy(lock->lk_wchan);
         kfree(lock->lk_name);
         kfree(lock);
 }
@@ -195,13 +196,13 @@ lock_acquire(struct lock *lock)
 
 	KASSERT(lock != NULL);
 	
-	spinlock_aquire(&lock->lk_spinlock);
+	spinlock_acquire(&lock->lk_spinlock);
         while(lock->lk_status == true)
 	{
 	    wchan_lock(lock->lk_wchan);
 	    spinlock_release(&lock->lk_spinlock);
             wchan_sleep(lock->lk_wchan);
-            spinlock_aquire(&lock->lk_spinlock);
+            spinlock_acquire(&lock->lk_spinlock);
         }
 	KASSERT(lock->lk_status == false);
 	lock->lk_owner = curthread;
@@ -214,15 +215,12 @@ lock_release(struct lock *lock)
 {
         KASSERT(lock != NULL);
 
-        spinlock_aquire(&lock->lk_spinlock);
+        spinlock_acquire(&lock->lk_spinlock);
 	KASSERT(lock->lk_owner == curthread);
         lock->lk_status = false;
         lock->lk_owner = NULL;
         wchan_wakeone(lock->lk_wchan);
         spinlock_release(&lock->lk_spinlock);        
-
-
-        (void)lock;  // suppress warning until code gets written
 }
 
 bool
@@ -230,6 +228,7 @@ lock_do_i_hold(struct lock *lock)
 {
         KASSERT(lock != NULL);
 
+	spinlock_acquire(&lock->lk_spinlock);
         if (lock->lk_owner == curthread)
 	{
 	    return true;
@@ -238,6 +237,7 @@ lock_do_i_hold(struct lock *lock)
 	{
 	    return false;
 	}
+	spinlock_release(&lock->lk_spinlock);
 }
 
 ////////////////////////////////////////////////////////////
