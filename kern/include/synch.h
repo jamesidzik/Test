@@ -76,7 +76,6 @@ struct lock {
         char *lk_name;
         struct wchan *lk_wchan;
         struct spinlock lk_spinlock;
-        volatile bool lk_status;
         volatile struct thread *lk_owner;
 };
 
